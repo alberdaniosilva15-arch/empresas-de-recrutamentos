@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
+import { auth } from '../firebase';
 import { motion } from 'motion/react';
 import { Mail, Lock, User as UserIcon, Building2, Briefcase, UserCircle, ClipboardList } from 'lucide-react';
 
@@ -13,12 +14,37 @@ export const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isOver18, setIsOver18] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { signIn, signUp } = useAuth();
+
+  const getErrorMessage = (error: any) => {
+    switch (error.code) {
+      case 'auth/email-already-in-use':
+        return 'Este email já está em uso. Por favor, tente entrar com a sua conta.';
+      case 'auth/invalid-email':
+        return 'O endereço de email fornecido é inválido.';
+      case 'auth/weak-password':
+        return 'A palavra-passe é demasiado fraca. Por favor, escolha uma mais forte.';
+      case 'auth/user-disabled':
+        return 'Esta conta de utilizador foi desativada.';
+      case 'auth/user-not-found':
+        return 'Não foi encontrado nenhum utilizador com este email.';
+      case 'auth/wrong-password':
+        return 'A palavra-passe está incorreta.';
+      case 'auth/invalid-credential':
+        return 'Credenciais inválidas. Verifique o seu email e palavra-passe.';
+      case 'auth/network-request-failed':
+        return 'Erro de rede. Verifique a sua ligação à internet.';
+      default:
+        return error.message || 'Ocorreu um erro inesperado. Por favor, tente novamente.';
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!isLogin && (!agreedToTerms || !isOver18)) {
-      alert('Você deve ter mais de 18 anos e aceitar os termos e condições.');
+      setError('Você deve ter mais de 18 anos e aceitar os termos e condições.');
       return;
     }
     setLoading(true);
@@ -28,8 +54,8 @@ export const Auth = () => {
       } else {
         await signUp(email, password, name, role, companyName);
       }
-    } catch (error: any) {
-      alert(error.message);
+    } catch (err: any) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -55,6 +81,16 @@ export const Auth = () => {
             {isLogin ? 'Bem-vindo ao recrutamento premium' : 'Inicie sua jornada profissional'}
           </p>
         </div>
+
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mb-6 p-4 bg-red-900/20 border border-red-900/30 rounded-2xl text-red-400 text-xs font-bold text-center"
+          >
+            {error}
+          </motion.div>
+        )}
 
         {!isLogin && (
           <div className="flex gap-4 mb-8">
@@ -134,6 +170,31 @@ export const Auth = () => {
             />
           </div>
 
+          {isLogin && (
+            <div className="text-right">
+              <button 
+                type="button"
+                onClick={async () => {
+                  if (!email) {
+                    setError('Por favor, insira o seu email primeiro.');
+                    return;
+                  }
+                  try {
+                    const { sendPasswordResetEmail } = await import('firebase/auth');
+                    await sendPasswordResetEmail(auth, email);
+                    setError(null);
+                    alert('Email de recuperação enviado! Verifique a sua caixa de entrada.');
+                  } catch (err: any) {
+                    setError(getErrorMessage(err));
+                  }
+                }}
+                className="text-[10px] font-black text-slate-500 hover:text-gold transition-colors uppercase tracking-widest"
+              >
+                Esqueceu a palavra-passe?
+              </button>
+            </div>
+          )}
+
           {!isLogin && (
             <div className="space-y-3 pt-2">
               <label className="flex items-start gap-3 cursor-pointer group">
@@ -178,7 +239,10 @@ export const Auth = () => {
 
         <div className="mt-8 text-center space-y-4">
           <button
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError(null);
+            }}
             className="text-xs font-black text-gold hover:text-gold-light transition-colors uppercase tracking-widest"
           >
             {isLogin ? 'Não tem conta? Registe-se' : 'Já tem conta? Entre aqui'}
