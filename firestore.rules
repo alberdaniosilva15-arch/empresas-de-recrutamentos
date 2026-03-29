@@ -3,6 +3,33 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - id: string (required) - User UID
+    //   - email: string (required) - User email
+    //   - name: string (required) - Full name
+    //   - role: string (required) - 'recruiter' or 'candidate'
+    //   - companyId: string (optional) - Link to companies collection
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: companies
+    // Fields:
+    //   - name: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: jobs
+    // Fields:
+    //   - title: string (required)
+    //   - description: string (required)
+    //   - companyId: string (required)
+    //   - status: string (required) - 'open', 'closed'
+    //
+    // ===============================================================
+
+    // ===============================================================
     // Helper Functions
     // ===============================================================
     
@@ -22,22 +49,14 @@ service cloud.firestore {
       return isAuthenticated() && getUserData().role == 'recruiter';
     }
 
-    function isCandidate() {
-      return isAuthenticated() && getUserData().role == 'candidate';
-    }
-
-    function getCompanyId() {
-      return getUserData().companyId;
-    }
-
     function isAdmin() {
       return isAuthenticated() &&
         (getUserData().role == 'admin' ||
           (request.auth.token.email == "alberdaniosilva16@gmail.com" && request.auth.token.email_verified == true));
     }
 
-    function isValidEmail(email) {
-      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
     }
 
     // ===============================================================
@@ -45,35 +64,62 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
-      allow create: if isAuthenticated() && isOwner(userId);
-      allow update: if isAuthenticated() && isOwner(userId);
+      // Users can only read their own data, or recruiters can read candidates
+      allow read: if isAuthenticated() && (isOwner(userId) || isRecruiter());
+      
+      // PROHIBIT direct creation/deletion from client. Only Admin SDK (backend) can do this.
+      allow create, delete: if false;
+      
+      // Only owner can update their own data (excluding role/companyId)
+      allow update: if isAuthenticated() && isOwner(userId) &&
+        hasOnlyAllowedFields(['name', 'email', 'id', 'createdAt']) &&
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
+        (!('companyId' in request.resource.data) || request.resource.data.companyId == resource.data.companyId);
     }
 
     match /companies/{companyId} {
+      // Anyone authenticated can read companies
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      
+      // PROHIBIT direct creation/deletion from client. Only Admin SDK (backend) can do this.
+      allow create, delete: if false;
+      
+      // Only admins or the recruiter who owns it can update
+      allow update: if isAdmin() || (isRecruiter() && getUserData().companyId == companyId);
     }
 
     match /jobs/{jobId} {
       allow read: if isAuthenticated();
-      allow create: if isRecruiter() && request.resource.data.companyId == getCompanyId();
-      allow update: if isRecruiter() && resource.data.companyId == getCompanyId() && request.resource.data.companyId == getCompanyId();
-      allow delete: if isRecruiter() && resource.data.companyId == getCompanyId();
+      allow create: if isRecruiter() && request.resource.data.companyId == getUserData().companyId;
+      allow update: if isRecruiter() && resource.data.companyId == getUserData().companyId;
+      allow delete: if isRecruiter() && resource.data.companyId == getUserData().companyId;
     }
 
     match /candidates/{candidateId} {
-      allow read: if isAuthenticated() && (isOwner(candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (isOwner(candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
-      allow delete: if isAdmin();
+      // Recruiters can read candidates from their company. Candidates can read their own.
+      allow read: if isAuthenticated() && (isOwner(candidateId) || isRecruiter());
+      
+      // Candidates can create their own profile.
+      allow create: if isAuthenticated() && isOwner(candidateId) && 
+        hasOnlyAllowedFields(['id', 'email', 'name', 'role', 'createdAt', 'statusHistory', 'status', 'score', 'classification']);
+      
+      // Only owner or recruiter can update.
+      allow update: if isAuthenticated() && (isOwner(candidateId) || isRecruiter());
+      
+      // Only Admin SDK can delete.
+      allow delete: if false;
     }
 
     match /applications/{applicationId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (isOwner(resource.data.candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && (isOwner(resource.data.candidateId) || isRecruiter());
+      allow create: if isAuthenticated() && isOwner(request.resource.data.candidateId);
+      allow update: if isAuthenticated() && (isOwner(resource.data.candidateId) || isRecruiter());
+      allow delete: if false;
+    }
+
+    match /system_errors/{errorId} {
+      // Only Admin SDK can read/write.
+      allow read, write: if false;
     }
     
     // Default deny

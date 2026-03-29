@@ -24,7 +24,7 @@ export const Auth = () => {
       case 'auth/invalid-email':
         return 'O endereço de email fornecido é inválido.';
       case 'auth/weak-password':
-        return 'A palavra-passe é demasiado fraca. Por favor, escolha uma mais forte.';
+        return 'A palavra-passe é demasiado fraca. Deve ter pelo menos 6 caracteres.';
       case 'auth/user-disabled':
         return 'Esta conta de utilizador foi desativada.';
       case 'auth/user-not-found':
@@ -35,6 +35,9 @@ export const Auth = () => {
         return 'Credenciais inválidas. Verifique o seu email e palavra-passe.';
       case 'auth/network-request-failed':
         return 'Erro de rede. Verifique a sua ligação à internet.';
+      case 'permission-denied':
+      case 'firestore/permission-denied':
+        return 'Erro de permissão ao salvar dados. Por favor, contacte o suporte.';
       default:
         return error.message || 'Ocorreu um erro inesperado. Por favor, tente novamente.';
     }
@@ -225,7 +228,7 @@ export const Auth = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gold text-premium-black py-4 rounded-2xl font-black shadow-xl shadow-gold/20 hover:bg-gold-light transition-all disabled:opacity-50 uppercase tracking-widest text-sm mt-4"
+            className="w-full bg-gold text-premium-black py-4 rounded-2xl font-black shadow-xl shadow-gold/20 hover:bg-gold-light transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm mt-4"
           >
             {loading ? 'Processando...' : isLogin ? 'Entrar' : 'Criar Conta'}
           </button>

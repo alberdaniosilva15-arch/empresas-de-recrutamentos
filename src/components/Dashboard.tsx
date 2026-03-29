@@ -173,8 +173,8 @@ export const Dashboard = () => {
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Candidatos Ativos</span>
             </div>
           </div>
-          <div className="h-[400px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[400px] w-full min-h-[400px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#222" />
                 <XAxis 

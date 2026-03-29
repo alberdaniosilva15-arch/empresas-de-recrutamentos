@@ -119,6 +119,103 @@ async function startServer() {
     }
   });
 
+  // Professional Atomic Registration Endpoint
+  app.post("/api/register-user", async (req, res) => {
+    const { email, password, name, role, companyName } = req.body;
+    
+    // 1. Server-side Validation
+    if (!email || !password || !name || !role) {
+      return res.status(400).json({ error: "Campos obrigatórios ausentes" });
+    }
+
+    if (!["candidate", "recruiter"].includes(role)) {
+      return res.status(400).json({ error: "Tipo de utilizador inválido" });
+    }
+
+    if (name.length > 100 || name.length < 2) {
+      return res.status(400).json({ error: "Nome inválido (2-100 caracteres)" });
+    }
+
+    if (role === "recruiter" && (!companyName || companyName.length < 2)) {
+      return res.status(400).json({ error: "Nome da empresa é obrigatório para recrutadores" });
+    }
+
+    const { adminAuth, adminDb, adminTimestamp } = await import("./server/firebase-admin");
+    let uid = "";
+
+    try {
+      // 2. Create User in Firebase Authentication
+      const userRecord = await adminAuth.createUser({
+        email,
+        password,
+        displayName: name,
+      });
+      uid = userRecord.uid;
+
+      // 3. Atomic Firestore Operations using Batch
+      const batch = adminDb.batch();
+      let companyId = "";
+
+      if (role === "recruiter") {
+        const companyRef = adminDb.collection("companies").doc();
+        companyId = companyRef.id;
+        batch.set(companyRef, {
+          name: companyName,
+          createdAt: adminTimestamp(),
+          ownerId: uid
+        });
+      }
+
+      const userRef = adminDb.collection("users").doc(uid);
+      const userData = {
+        id: uid,
+        email,
+        name,
+        role,
+        companyId: role === "recruiter" ? companyId : null,
+        createdAt: adminTimestamp(),
+      };
+
+      // Remove undefined/null values explicitly
+      const cleanUserData = Object.fromEntries(
+        Object.entries(userData).filter(([_, v]) => v !== undefined && v !== null)
+      );
+
+      batch.set(userRef, cleanUserData);
+
+      // 4. Commit Firestore Batch
+      await batch.commit();
+
+      res.json({ success: true, uid });
+    } catch (error: any) {
+      console.error("Registration failed:", error);
+
+      // 5. Rollback: If Firestore fails, delete the Auth user
+      if (uid) {
+        try {
+          await adminAuth.deleteUser(uid);
+        } catch (deleteError) {
+          console.error("Critical: Rollback failed (Auth user not deleted):", deleteError);
+          // 6. Log critical failure for reconciliation
+          await adminDb.collection("system_errors").add({
+            type: "REGISTRATION_ROLLBACK_FAILURE",
+            uid,
+            email,
+            error: error.message,
+            timestamp: adminTimestamp(),
+          });
+        }
+      }
+
+      // Handle common Firebase Auth errors
+      if (error.code === "auth/email-already-exists") {
+        return res.status(400).json({ error: "Este email já está em uso." });
+      }
+
+      res.status(500).json({ error: error.message || "Falha no registo" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

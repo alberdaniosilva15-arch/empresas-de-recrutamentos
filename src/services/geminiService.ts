@@ -5,10 +5,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
 export async function analyzeCV(cvText: string) {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Analise o seguinte CV de um candidato e forneça um resumo executivo de 3 frases, destacando as principais competências e experiências relevantes para a vaga: \n\n ${cvText}`,
@@ -22,6 +21,7 @@ export async function analyzeCV(cvText: string) {
 
 export async function chatWithAI(message: string, context: string) {
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Você é Lukeni, o assistente inteligente do GoldTalent, um sistema de recrutamento premium para todas as áreas de atuação.

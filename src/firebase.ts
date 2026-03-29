@@ -67,11 +67,20 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Validate Connection to Firestore
 async function testConnection() {
+  const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
+  console.log(`Initializing Firestore with database ID: ${dbId}`);
+  
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. ");
+    const testDoc = doc(db, 'test', 'connection');
+    await getDocFromServer(testDoc);
+    console.log(`Firestore connection verified successfully for database: ${dbId}`);
+  } catch (error: any) {
+    if (error.message?.includes('the client is offline') || error.code === 'unavailable') {
+      console.error(`CRITICAL: Firestore is offline for database ${dbId}. Check Firebase configuration and rules.`);
+    } else if (error.code === 'permission-denied') {
+      console.log(`Firestore connection test reached the server for database ${dbId} (permission denied as expected).`);
+    } else {
+      console.log(`Firestore connection test completed for database ${dbId} with status: ${error.code || error.message}`);
     }
   }
 }

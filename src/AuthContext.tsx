@@ -14,6 +14,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Utility to remove undefined values from objects for Firestore
+const cleanData = (data: any) => {
+  const clean: any = {};
+  Object.keys(data).forEach((key) => {
+    if (data[key] !== undefined && data[key] !== null) {
+      clean[key] = data[key];
+    }
+  });
+  return clean;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,6 +37,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             setUser({ id: firebaseUser.uid, ...userDoc.data() } as User);
           } else {
+            // If user exists in Auth but not in Firestore, we might want to sign them out
+            // to prevent a broken state, or handle it as a partial registration.
+            // For now, we set user to null to force them to the Auth screen.
             setUser(null);
           }
         } else {
@@ -43,30 +57,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signUp = async (email: string, pass: string, name: string, role: 'recruiter' | 'candidate', companyName?: string) => {
-    const { createUserWithEmailAndPassword } = await import('firebase/auth');
-    const res = await createUserWithEmailAndPassword(auth, email, pass);
-    
-    let companyId = '';
-    if (role === 'recruiter' && companyName) {
-      const companyRef = doc(collection(db, 'companies'));
-      companyId = companyRef.id;
-      await setDoc(companyRef, {
-        name: companyName,
-        createdAt: serverTimestamp()
-      });
+    // Call the professional server-side registration endpoint
+    const response = await fetch('/api/register-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass, name, role, companyName }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Falha no registo');
     }
 
-    const userData: User = {
-      id: res.user.uid,
-      email,
-      name,
-      role,
-      companyId: companyId || undefined,
-      createdAt: serverTimestamp()
-    };
-
-    await setDoc(doc(db, 'users', res.user.uid), userData);
-    setUser(userData);
+    // After successful server-side registration, sign in on the client
+    const { signInWithEmailAndPassword } = await import('firebase/auth');
+    await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const signIn = async (email: string, pass: string) => {
