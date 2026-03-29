@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold: #D4AF37;
+  --color-gold-light: #F1D592;
+  --color-gold-dark: #9A7B2C;
+  --color-premium-black: #050505;
+  --color-premium-gray: #111111;
+  --color-premium-border: #222222;
+}
+
+@layer base {
+  body {
+    @apply bg-premium-black text-slate-300;
+  }
+}

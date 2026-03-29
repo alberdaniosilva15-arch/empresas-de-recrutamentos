@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isRecruiter() {
+      return isAuthenticated() && getUserData().role == 'recruiter';
+    }
+
+    function isCandidate() {
+      return isAuthenticated() && getUserData().role == 'candidate';
+    }
+
+    function getCompanyId() {
+      return getUserData().companyId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (getUserData().role == 'admin' ||
+          (request.auth.token.email == "alberdaniosilva16@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+    }
+
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isAuthenticated();
+      allow create: if isRecruiter() && request.resource.data.companyId == getCompanyId();
+      allow update: if isRecruiter() && resource.data.companyId == getCompanyId() && request.resource.data.companyId == getCompanyId();
+      allow delete: if isRecruiter() && resource.data.companyId == getCompanyId();
+    }
+
+    match /candidates/{candidateId} {
+      allow read: if isAuthenticated() && (isOwner(candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isOwner(candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
+      allow delete: if isAdmin();
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (isOwner(resource.data.candidateId) || (isRecruiter() && getCompanyId() == resource.data.companyId));
+      allow delete: if isAdmin();
+    }
+    
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
