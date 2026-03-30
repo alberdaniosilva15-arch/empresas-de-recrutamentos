@@ -1,25 +1,29 @@
 import admin from "firebase-admin";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-
-const serviceAccountText = process.env.FIREBASE_SERVICE_ACCOUNT;
+import { getFirestore } from "firebase-admin/firestore";
+import firebaseConfig from "../firebase-applet-config.json";
 
 if (!admin.apps.length) {
-  if (!serviceAccountText) {
-    throw new Error("ERRO: FIREBASE_SERVICE_ACCOUNT não encontrada!");
-  }
+  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-  // Correção crítica para as quebras de linha da chave privada na Vercel
-  const serviceAccount = JSON.parse(serviceAccountText);
-  if (serviceAccount.private_key) {
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  if (projectId && clientEmail && privateKey) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+  } else {
+    // Fallback for environment without explicit credentials (e.g., local dev or Cloud Run)
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
   }
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  console.log("✅ Firebase Admin inicializado com sucesso!");
 }
 
 export const adminAuth = admin.auth();
 export const adminDb = getFirestore();
-export const adminTimestamp = FieldValue.serverTimestamp;
+adminDb.settings({ databaseId: process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId });
+export const adminTimestamp = admin.firestore.FieldValue.serverTimestamp;

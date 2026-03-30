@@ -77,8 +77,8 @@ async function testConnection() {
   } catch (error: any) {
     if (error.message?.includes('the client is offline') || error.code === 'unavailable') {
       console.error(`CRITICAL: Firestore is offline for database ${dbId}. Check Firebase configuration and rules.`);
-    } else if (error.code === 'permission-denied') {
-      console.log(`Firestore connection test reached the server for database ${dbId} (permission denied as expected).`);
+    } else if (error.code === 'permission-denied' || error.message?.includes('permission-denied')) {
+      console.log(`Firestore connection test reached the server for database ${dbId} (permission denied). This is expected if rules are restrictive.`);
     } else {
       console.log(`Firestore connection test completed for database ${dbId} with status: ${error.code || error.message}`);
     }

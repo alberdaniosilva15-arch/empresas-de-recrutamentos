@@ -1,149 +1,232 @@
 import express from "express";
 import path from "path";
+import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
-async function startServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+const app = express();
+app.use(express.json());
 
-  app.use(express.json());
+// API Routes
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", service: "GoldTalent API", vercel: !!process.env.VERCEL });
+});
 
-  // --- API ROUTES ---
-
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      service: "GoldTalent API", 
-      env: process.env.NODE_ENV,
-      vercel: !!process.env.VERCEL 
-    });
-  });
-
-  app.post("/api/score-cv", async (req, res) => {
-    const { text, jobDescription } = req.body;
-    if (!text) return res.status(400).json({ error: "No text provided" });
-    
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
-
-      const response = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: `Analyze this CV text against the job description.
-        CV: ${text}
-        Job: ${jobDescription || "Profissional qualificado"}
-        
-        Return JSON with:
-        - score (0-100)
-        - scoreBreakdown (object with skills, experience, education scores 0-100)
-        - classification ("baixo", "médio", "alto")
-        - skills (array of extracted skills)
-        - experienceKeywords (array of key experience terms)
-        - summary (brief analysis)` }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-        }
-      });
-
-      res.json(JSON.parse(response.response.text()));
-    } catch (error) {
-      console.error("AI Analysis failed:", error);
-      res.status(500).json({ error: "AI Analysis failed" });
-    }
-  });
-
-  app.post("/api/test-whatsapp", async (req, res) => {
-    const { phone, message } = req.body;
-    const webhookUrl = process.env.N8N_WHATSAPP_WEBHOOK_URL;
-
-    if (!webhookUrl) return res.status(400).json({ error: "Webhook not configured" });
-
-    try {
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, message, type: "test" }),
-      });
-      res.json({ success: response.ok });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/send-email", async (req, res) => {
-    const { to, candidateName, status, jobTitle } = req.body;
-    try {
-      // Import dinâmico com fallback de extensão para ambiente Node/Vercel
-      const { sendCandidateEmail } = await import("./server/email.js");
-      await sendCandidateEmail(to, candidateName, status, jobTitle);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to send email" });
-    }
-  });
-
-  app.post("/api/register-user", async (req, res) => {
-    const { email, password, name, role, companyName } = req.body;
-    if (!email || !password || !name || !role) return res.status(400).json({ error: "Missing fields" });
-
-    try {
-      const { adminAuth, adminDb, adminTimestamp } = await import("./server/firebase-admin.js");
-      const userRecord = await adminAuth.createUser({ email, password, displayName: name });
-      const uid = userRecord.uid;
-
-      const batch = adminDb.batch();
-      if (role === "recruiter") {
-        const companyRef = adminDb.collection("companies").doc();
-        batch.set(companyRef, { name: companyName, createdAt: adminTimestamp(), ownerId: uid });
+// AI CV Scoring & Analysis
+app.post("/api/score-cv", async (req, res) => {
+  const { text, jobDescription } = req.body;
+  if (!text) return res.status(400).json({ error: "No text provided" });
+  
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Analyze this CV text against the job description.
+      CV: ${text}
+      Job: ${jobDescription || "Profissional qualificado"}
+      
+      Return JSON with:
+      - score (0-100)
+      - scoreBreakdown (object with skills, experience, education scores 0-100)
+      - classification ("baixo", "médio", "alto")
+      - skills (array of extracted skills)
+      - experienceKeywords (array of key experience terms)
+      - summary (brief analysis)`,
+      config: {
+        responseMimeType: "application/json",
       }
+    });
 
-      batch.set(adminDb.collection("users").doc(uid), {
-        id: uid, email, name, role, createdAt: adminTimestamp()
-      });
+    const result = JSON.parse(response.text);
+    res.json(result);
+  } catch (error) {
+    console.error("AI Analysis failed:", error);
+    res.status(500).json({ error: "AI Analysis failed" });
+  }
+});
 
-      await batch.commit();
-      res.json({ success: true, uid });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+// Test WhatsApp endpoint
+app.post("/api/test-whatsapp", async (req, res) => {
+  const { phone, message } = req.body;
+  const webhookUrl = process.env.N8N_WHATSAPP_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    return res.status(400).json({ error: "N8N_WHATSAPP_WEBHOOK_URL not configured" });
+  }
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone: phone || "+351900000000",
+        message: message || "Teste de integração GoldTalent",
+        type: "test"
+      }),
+    });
+
+    if (!response.ok) throw new Error(`n8n error: ${response.status}`);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// n8n Webhook Proxy
+app.post("/api/notify-whatsapp", async (req, res) => {
+  const { data } = req.body;
+  const webhookUrl = process.env.N8N_WHATSAPP_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    console.log("N8N_WHATSAPP_WEBHOOK_URL not configured, skipping WhatsApp notification.");
+    console.log("Simulated data for n8n:", data);
+    return res.json({ success: true, message: "Notification simulated (no webhook URL)" });
+  }
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error(`n8n responded with ${response.status}`);
     }
-  });
 
-  // --- CONFIGURAÇÃO DE AMBIENTE (VERCEL / VITE) ---
+    res.json({ success: true, message: "Notification sent to n8n" });
+  } catch (error) {
+    console.error("Failed to notify n8n:", error);
+    res.status(500).json({ error: "Failed to notify n8n" });
+  }
+});
 
-  const isVercel = process.env.VERCEL === "1";
-  const isProd = process.env.NODE_ENV === "production";
+// Email Sending Route
+app.post("/api/send-email", async (req, res) => {
+  const { to, candidateName, status, jobTitle } = req.body;
+  try {
+    const { sendCandidateEmail } = await import("./server/email");
+    await sendCandidateEmail(to, candidateName, status, jobTitle);
+    res.json({ success: true, message: "Email sent successfully" });
+  } catch (error) {
+    console.error("Failed to send email:", error);
+    res.status(500).json({ error: "Failed to send email" });
+  }
+});
 
-  if (!isProd && !isVercel) {
-    // Ambiente Local: Usa o Middleware do Vite
-    const { createServer: createViteServer } = await import("vite");
+// Professional Atomic Registration Endpoint
+app.post("/api/register-user", async (req, res) => {
+  const { email, password, name, role, companyName } = req.body;
+  
+  // 1. Server-side Validation
+  if (!email || !password || !name || !role) {
+    return res.status(400).json({ error: "Campos obrigatórios ausentes" });
+  }
+
+  if (!["candidate", "recruiter"].includes(role)) {
+    return res.status(400).json({ error: "Tipo de utilizador inválido" });
+  }
+
+  if (name.length > 100 || name.length < 2) {
+    return res.status(400).json({ error: "Nome inválido (2-100 caracteres)" });
+  }
+
+  if (role === "recruiter" && (!companyName || companyName.length < 2)) {
+    return res.status(400).json({ error: "Nome da empresa é obrigatório para recrutadores" });
+  }
+
+  const { adminAuth, adminDb, adminTimestamp } = await import("./server/firebase-admin");
+  let uid = "";
+
+  try {
+    // 2. Create User in Firebase Authentication
+    const userRecord = await adminAuth.createUser({
+      email,
+      password,
+      displayName: name,
+    });
+    uid = userRecord.uid;
+
+    // 3. Atomic Firestore Operations using Batch
+    const batch = adminDb.batch();
+    let companyId = "";
+
+    if (role === "recruiter") {
+      const companyRef = adminDb.collection("companies").doc();
+      companyId = companyRef.id;
+      batch.set(companyRef, {
+        name: companyName,
+        createdAt: adminTimestamp(),
+        ownerId: uid
+      });
+    }
+
+    const userRef = adminDb.collection("users").doc(uid);
+    const userData = {
+      id: uid,
+      email,
+      name,
+      role,
+      companyId: role === "recruiter" ? companyId : null,
+      createdAt: adminTimestamp(),
+    };
+
+    // Remove undefined/null values explicitly
+    const cleanUserData = Object.fromEntries(
+      Object.entries(userData).filter(([_, v]) => v !== undefined && v !== null)
+    );
+
+    batch.set(userRef, cleanUserData);
+
+    // 4. Commit Firestore Batch
+    await batch.commit();
+
+    res.json({ success: true, uid });
+  } catch (error: any) {
+    console.error("Registration failed:", error);
+
+    // 5. Rollback: If Firestore fails, delete the Auth user
+    if (uid) {
+      try {
+        await adminAuth.deleteUser(uid);
+      } catch (deleteError) {
+        console.error("Critical: Rollback failed (Auth user not deleted):", deleteError);
+        // 6. Log critical failure for reconciliation
+        await adminDb.collection("system_errors").add({
+          type: "REGISTRATION_ROLLBACK_FAILURE",
+          uid,
+          email,
+          error: error.message,
+          timestamp: adminTimestamp(),
+        });
+      }
+    }
+
+    // Handle common Firebase Auth errors
+    if (error.code === "auth/email-already-exists") {
+      return res.status(400).json({ error: "Este email já está em uso." });
+    }
+
+    res.status(500).json({ error: error.message || "Falha no registo" });
+  }
+});
+
+// Handle development server
+if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  const startServer = async () => {
+    const PORT = process.env.PORT || 3000;
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    // Ambiente Produção/Vercel: Serve ficheiros da pasta 'dist'
-    const distPath = path.resolve(process.cwd(), "dist");
-    
-    // IMPORTANTE: Servir estáticos antes do catch-all (*) para evitar erro de MIME type
-    app.use(express.static(distPath, { index: false }));
-
-    app.get("*", (req, res) => {
-      // Se for uma rota de API que não existe, não envia o HTML
-      if (req.path.startsWith("/api")) {
-        return res.status(404).json({ error: "API endpoint not found" });
-      }
-      res.sendFile(path.join(distPath, "index.html"));
+    app.listen(Number(PORT), "0.0.0.0", () => {
+      console.log(`GoldTalent Server running on http://localhost:${PORT}`);
     });
-  }
-
-  if (!isVercel) {
-    app.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
-    });
-  }
+  };
+  startServer();
 }
 
-startServer().catch(console.error);
+export default app;
