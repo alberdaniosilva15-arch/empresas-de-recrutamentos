@@ -1,9 +1,9 @@
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
-import firebaseConfig from "../firebase-applet-config.json";
 
 if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID || firebaseConfig.projectId;
+  // Tenta ler das variáveis de ambiente da Vercel primeiro
+  const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
@@ -16,14 +16,17 @@ if (!admin.apps.length) {
       }),
     });
   } else {
-    // Fallback for environment without explicit credentials (e.g., local dev or Cloud Run)
-    admin.initializeApp({
-      projectId: firebaseConfig.projectId,
-    });
+    // Fallback apenas para desenvolvimento local (se as variáveis estiverem no .env)
+    admin.initializeApp();
   }
 }
 
 export const adminAuth = admin.auth();
 export const adminDb = getFirestore();
-adminDb.settings({ databaseId: process.env.FIREBASE_DATABASE_ID || firebaseConfig.firestoreDatabaseId });
+
+// MUITO IMPORTANTE: Garante que esta variável está na Vercel!
+if (process.env.FIREBASE_DATABASE_ID) {
+  adminDb.settings({ databaseId: process.env.FIREBASE_DATABASE_ID });
+}
+
 export const adminTimestamp = admin.firestore.FieldValue.serverTimestamp;

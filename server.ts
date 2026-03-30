@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
@@ -20,10 +20,10 @@ app.post("/api/score-cv", async (req, res) => {
   if (!text) return res.status(400).json({ error: "No text provided" });
   
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-pro-preview",
-      contents: `Analyze this CV text against the job description.
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+
+    const prompt = `Analyze this CV text against the job description.
       CV: ${text}
       Job: ${jobDescription || "Profissional qualificado"}
       
@@ -33,14 +33,15 @@ app.post("/api/score-cv", async (req, res) => {
       - classification ("baixo", "médio", "alto")
       - skills (array of extracted skills)
       - experienceKeywords (array of key experience terms)
-      - summary (brief analysis)`,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
+      - summary (brief analysis)`;
 
-    const result = JSON.parse(response.text);
-    res.json(result);
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text();
+    
+    // Limpeza simples caso a IA mande ```json ... ```
+    const cleanJson = jsonText.replace(/```json|```/g, "");
+    res.json(JSON.parse(cleanJson));
   } catch (error) {
     console.error("AI Analysis failed:", error);
     res.status(500).json({ error: "AI Analysis failed" });

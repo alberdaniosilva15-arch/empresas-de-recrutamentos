@@ -167,30 +167,39 @@ export const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-premium-gray p-8 rounded-3xl border border-premium-border shadow-sm">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-black text-gold tracking-tight">Pipeline de Recrutamento</h3>
+            <h3 className="text-xl font-black text-gold tracking-tight">Fluxo de Candidaturas</h3>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-gold rounded-full"></div>
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Candidatos Ativos</span>
             </div>
           </div>
-          <div className="h-[400px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%" debounce={50}>
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+          
+          <div className="h-[400px] w-full min-h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={chartData}
+                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#D4AF37" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#222" />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748B', fontSize: 12, fontWeight: 700 }}
+                  tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
                   dy={10}
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748B', fontSize: 12, fontWeight: 700 }}
+                  tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }} 
                 />
                 <Tooltip 
-                  cursor={{ fill: '#050505' }}
                   contentStyle={{ 
                     backgroundColor: '#050505', 
                     border: '1px solid #222', 
@@ -200,12 +209,15 @@ export const Dashboard = () => {
                   }}
                   itemStyle={{ color: '#D4AF37', fontWeight: 700 }}
                 />
-                <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={50}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
+                <Area 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#D4AF37" 
+                  fillOpacity={1} 
+                  fill="url(#colorValue)" 
+                  strokeWidth={3}
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
