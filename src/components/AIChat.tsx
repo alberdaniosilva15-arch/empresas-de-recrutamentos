@@ -8,7 +8,7 @@ import { MessageSquare, Send, X, Bot, User, Sparkles, ClipboardList } from "luci
 import { motion, AnimatePresence } from "motion/react";
 import { chatWithAI } from "../services/geminiService";
 import { db } from "../firebase";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, getDoc, setDoc, increment } from "firebase/firestore";
 import { useAuth } from "../AuthContext";
 import { Candidate, Job } from "../types";
 
@@ -27,10 +27,21 @@ export const AIChat = () => {
 
   useEffect(() => {
     if (!user) return;
+    
     const today = new Date().toISOString().split('T')[0];
-    const usageKey = `ai_usage_${user.uid}_${today}`;
-    const used = parseInt(localStorage.getItem(usageKey) || "0");
-    setDailyLimit(10 - used);
+    const usageId = `${user.uid}_${today}`;
+    const usageRef = doc(db, "usage", usageId);
+
+    const unsubscribe = onSnapshot(usageRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const used = docSnap.data().count || 0;
+        setDailyLimit(10 - used);
+      } else {
+        setDailyLimit(10);
+      }
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
@@ -89,12 +100,17 @@ export const AIChat = () => {
       const response = await chatWithAI(userMsg, context);
       setMessages(prev => [...prev, { role: 'ai', text: response || "Não consegui processar sua mensagem." }]);
       
-      // Update usage
+      // Update usage in Firestore
       const today = new Date().toISOString().split('T')[0];
-      const usageKey = `ai_usage_${user?.uid}_${today}`;
-      const used = parseInt(localStorage.getItem(usageKey) || "0") + 1;
-      localStorage.setItem(usageKey, used.toString());
-      setDailyLimit(10 - used);
+      const usageId = `${user?.uid}_${today}`;
+      const usageRef = doc(db, "usage", usageId);
+      
+      await setDoc(usageRef, { 
+        count: increment(1),
+        lastUsed: new Date().toISOString(),
+        userId: user?.uid
+      }, { merge: true });
+
     } catch (error) {
       setMessages(prev => [...prev, { role: 'ai', text: "Erro ao conectar com a IA do GoldTalent." }]);
     } finally {

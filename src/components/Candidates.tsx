@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, Plus, Mail, Phone, MoreVertical, Star, Clock, CheckCircle2, AlertCircle, X, FileText, Download, Trash2, ExternalLink, ClipboardList } from "lucide-react";
+import { Search, Filter, Plus, Mail, Phone, MoreVertical, Star, Clock, CheckCircle2, AlertCircle, X, FileText, Download, Trash2, ExternalLink, ClipboardList, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, arrayUnion } from "firebase/firestore";
@@ -7,6 +7,7 @@ import { Candidate, CandidateStatus, Job } from "../types";
 import { triggerCandidateEmail } from "../lib/email";
 import { triggerWhatsAppNotification } from "../lib/whatsapp";
 import { useAuth } from "../AuthContext";
+import { suggestJobsForCandidate } from "../services/geminiService";
 
 export const Candidates = () => {
   const { user } = useAuth();
@@ -18,6 +19,8 @@ export const Candidates = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string | null>(null);
   const [newCandidate, setNewCandidate] = useState({
     name: "",
     email: "",
@@ -559,6 +562,32 @@ export const Candidates = () => {
                       <p className="text-sm text-slate-500 italic">Nenhum histórico disponível.</p>
                     )}
                   </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                    <span className="flex items-center gap-2">Sugestões de Vagas IA <Sparkles size={14} className="text-gold" /></span>
+                    <button 
+                      onClick={async () => {
+                        if (!selectedCandidate) return;
+                        setIsSuggesting(true);
+                        const suggestions = await suggestJobsForCandidate(selectedCandidate.cvText || "", jobs);
+                        setAiSuggestions(suggestions);
+                        setIsSuggesting(false);
+                      }}
+                      disabled={isSuggesting}
+                      className="text-[10px] bg-gold/10 text-gold px-2 py-1 rounded border border-gold/20 hover:bg-gold/20 transition-all"
+                    >
+                      {isSuggesting ? "Analisando..." : "Sugerir com IA"}
+                    </button>
+                  </h4>
+                  {aiSuggestions ? (
+                    <div className="p-6 bg-gold/5 rounded-3xl border border-gold/20 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                      {aiSuggestions}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-600 italic">Clique em "Sugerir com IA" para ver as melhores vagas para este perfil.</p>
+                  )}
                 </div>
 
                 <div>

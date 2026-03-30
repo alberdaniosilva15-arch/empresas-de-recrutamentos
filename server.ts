@@ -22,7 +22,7 @@ app.post("/api/score-cv", async (req, res) => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `Analyze this CV text against the job description.
       CV: ${text}
       Job: ${jobDescription || "Profissional qualificado"}

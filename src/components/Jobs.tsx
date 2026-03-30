@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { MapPin, Clock, Users, Briefcase, Plus, X, ClipboardList, Download, LayoutGrid, List, ExternalLink } from "lucide-react";
+import { MapPin, Clock, Users, Briefcase, Plus, X, ClipboardList, Download, LayoutGrid, List, ExternalLink, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, where } from "firebase/firestore";
 import { Job, Candidate } from "../types";
 import { useAuth } from "../AuthContext";
 import { TimeAgo } from "./TimeAgo";
+import { generateJobDescription } from "../services/geminiService";
 
 export const Jobs = () => {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ export const Jobs = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [newJob, setNewJob] = useState({
@@ -320,8 +322,27 @@ export const Jobs = () => {
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Descrição</label>
+                <div className="relative">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex justify-between items-center">
+                    Descrição
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        if (!newJob.title) {
+                          alert("Por favor, insira o título da vaga primeiro.");
+                          return;
+                        }
+                        setIsGenerating(true);
+                        const desc = await generateJobDescription(newJob.title, newJob.description || "Requisitos padrão");
+                        setNewJob(prev => ({ ...prev, description: desc }));
+                        setIsGenerating(false);
+                      }}
+                      disabled={isGenerating}
+                      className="text-[10px] bg-gold/10 text-gold px-2 py-1 rounded border border-gold/20 hover:bg-gold/20 transition-all flex items-center gap-1"
+                    >
+                      {isGenerating ? "Gerando..." : <><Sparkles size={10} /> Gerar com IA</>}
+                    </button>
+                  </label>
                   <textarea 
                     value={newJob.description}
                     onChange={e => setNewJob({...newJob, description: e.target.value})}
