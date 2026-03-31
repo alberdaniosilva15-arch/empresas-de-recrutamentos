@@ -4,7 +4,7 @@ import jobRoutes from "./jobRoutes";
 import applicationRoutes from "./applicationRoutes";
 import { ConversationEngine } from "../core/conversationEngine";
 import { addCorrelationId } from "../middlewares/auth";
-import { adminAuth } from "../firebase-admin";
+import { adminAuth, adminDb, adminTimestamp, adminIncrement } from "../firebase-admin";
 
 const router = Router();
 
@@ -44,6 +44,35 @@ router.get("/check-firebase-env", (_req, res) => {
   }
 
   res.json(status);
+});
+
+router.post("/upgrade-plan", async (req, res) => {
+  const { userId, plan } = req.body;
+  try {
+    const userRef = adminDb.collection("users").doc(userId);
+    await userRef.update({
+      plan,
+      updatedAt: adminTimestamp()
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+router.post("/activate-boost", async (req, res) => {
+  const { userId, boostType } = req.body;
+  try {
+    const userRef = adminDb.collection("users").doc(userId);
+    // In a real app, we would calculate expiration time
+    await userRef.update({
+      boosts: adminIncrement(1),
+      updatedAt: adminTimestamp()
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 router.use("/candidates", candidateRoutes);

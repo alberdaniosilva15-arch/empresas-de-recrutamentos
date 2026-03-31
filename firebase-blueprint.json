@@ -5,14 +5,30 @@
       "description": "User profile (Recruiter or Candidate)",
       "type": "object",
       "properties": {
-        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "id": { "type": "string", "description": "Firebase Auth UID" },
         "name": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "role": { "type": "string", "enum": ["recruiter", "candidate"] },
         "companyId": { "type": "string", "description": "ID of the company (only for recruiters)" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "plan": { "type": "string", "enum": ["free", "premium", "elite"] },
+        "boosts": { "type": "integer" },
+        "trustScore": { "type": "integer" },
+        "visibilityScore": { "type": "integer" },
+        "loginStreak": { "type": "integer" },
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["uid", "name", "email", "role"]
+      "required": ["id", "name", "email", "role"]
+    },
+    "Usage": {
+      "title": "Usage",
+      "description": "AI Chat usage tracking",
+      "type": "object",
+      "properties": {
+        "count": { "type": "integer" }
+      },
+      "required": ["count"]
     },
     "Company": {
       "title": "Company",
@@ -106,6 +122,10 @@
     "/applications/{applicationId}": {
       "schema": "Application",
       "description": "Job applications"
+    },
+    "/usage/{usageId}": {
+      "schema": "Usage",
+      "description": "AI Chat usage tracking"
     }
   }
 }

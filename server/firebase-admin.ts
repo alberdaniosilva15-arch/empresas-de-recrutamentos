@@ -38,9 +38,25 @@ validateFirebaseEnv();
 
 if (!admin.apps.length) {
   // Tenta ler das variáveis de ambiente da Vercel primeiro
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  let projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+  // Resiliência: Se o projectId parece um hash ou está ausente, tenta extrair do email
+  if (clientEmail && (!projectId || projectId.length > 30 || /^[a-f0-9]+$/.test(projectId))) {
+    const parts = clientEmail.split('@');
+    if (parts.length > 1) {
+      const domainParts = parts[1].split('.');
+      if (domainParts.length > 0) {
+        projectId = domainParts[0];
+        console.log(`💡 Extraindo Project ID do email: ${projectId}`);
+      }
+    }
+  }
+
+  if (projectId) {
+    projectId = projectId.trim().replace(/[^a-zA-Z0-9-]/g, '');
+  }
 
   if (projectId && clientEmail && privateKey) {
     admin.initializeApp({
@@ -65,3 +81,5 @@ if (process.env.FIREBASE_DATABASE_ID) {
 }
 
 export const adminTimestamp = admin.firestore.FieldValue.serverTimestamp;
+export const adminIncrement = admin.firestore.FieldValue.increment;
+export const adminFieldValue = admin.firestore.FieldValue;

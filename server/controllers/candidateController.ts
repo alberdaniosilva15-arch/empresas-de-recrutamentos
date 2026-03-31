@@ -2,36 +2,67 @@ import { Request, Response } from "express";
 import { adminDb, adminTimestamp } from "../firebase-admin";
 import { AIEngine } from "../core/aiEngine";
 import { Candidate } from "../../src/types";
+import { SecurityValidator } from "../core/securityValidator";
 
 export class CandidateController {
   static async create(req: Request, res: Response) {
     const correlationId = (req as any).correlationId;
-    const { cvText, jobId } = req.body;
+    const { cvText, jobId, parsedCV } = req.body;
     const user = (req as any).user;
 
     console.log(`[${correlationId}] [CandidateController] Creating candidate for job ${jobId}`);
 
     try {
-      // 1. Parse CV with AI
-      const parsedCV = await AIEngine.parseCV(cvText, correlationId);
+      // 0. Get User Plan and Boosts
+      const userDoc = await adminDb.collection("users").doc(user.id).get();
+      const userData = userDoc.data() || { plan: 'free', boosts: 0 };
+      const plan = userData.plan || 'free';
+      const boosts = userData.boosts || 0;
 
-      // 2. Prepare Candidate Data
+      // 1. Sanitize and Validate parsedCV from frontend
+      const sanitizedCV = SecurityValidator.sanitizeParsedCV(parsedCV);
+      
+      // 2. Perform Sanity Check
+      const sanity = SecurityValidator.performSanityCheck({ cvText, score: sanitizedCV.score });
+      
+      if (sanity.isSuspicious) {
+        await SecurityValidator.logSecurityEvent({
+          userId: user.id,
+          type: 'SCORE_MANIPULATION',
+          originalScore: parsedCV?.score,
+          sanitizedScore: sanitizedCV.score,
+          correlationId,
+          details: { reason: sanity.reason, cvLength: cvText.length }
+        });
+      }
+
+      // 3. Calculate Confidence and Final Score (Visibility Engine)
+      const confidenceScore = SecurityValidator.calculateConfidence(cvText);
+      const finalScore = SecurityValidator.calculateFinalScore(sanitizedCV.score, confidenceScore, sanity.isSuspicious, plan, boosts);
+      const flags = SecurityValidator.getFlags(confidenceScore, sanity.isSuspicious);
+
+      // 4. Prepare Candidate Data
       const candidateRef = adminDb.collection("candidates").doc();
       const candidateData: Candidate = {
         id: candidateRef.id,
-        name: parsedCV.name || user.name,
-        email: parsedCV.email || user.email,
-        phone: parsedCV.phone || "",
+        name: sanitizedCV?.name || user.name,
+        email: sanitizedCV?.email || user.email,
+        phone: sanitizedCV?.phone || "",
         cvText,
-        skills: parsedCV.skills || [],
-        experienceKeywords: parsedCV.experienceKeywords || [],
-        education: parsedCV.education || "",
-        score: 0, // Will be calculated by matching engine
-        scoreBreakdown: { skills: 0, experience: 0, education: 0 },
-        classification: 'baixo',
+        skills: sanitizedCV?.skills || [],
+        experienceKeywords: sanitizedCV?.experienceKeywords || [],
+        education: sanitizedCV?.education || "",
+        score: sanitizedCV?.score || 0,
+        confidenceScore,
+        finalScore,
+        planMultiplier: plan === 'elite' ? 1.8 : (plan === 'premium' ? 1.3 : 1),
+        boostMultiplier: boosts > 0 ? 2 : 1,
+        flags,
+        scoreBreakdown: sanitizedCV?.scoreBreakdown || { skills: 0, experience: 0, education: 0 },
+        classification: sanitizedCV?.classification || 'baixo',
         status: 'applied',
         jobId,
-        companyId: user.companyId || "", // If recruiter is creating
+        companyId: user.companyId || "",
         createdAt: adminTimestamp(),
         updatedAt: adminTimestamp(),
       };

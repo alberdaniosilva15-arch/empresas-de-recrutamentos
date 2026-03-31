@@ -9,11 +9,35 @@ export class MatchingEngine {
     try {
       const aiResult = await AIEngine.evaluateCandidate(candidate, job, correlationId);
       
-      const finalScore = this.calculateScore(aiResult);
+      const aiScore = this.calculateScore(aiResult);
+      const confidenceScore = candidate.confidenceScore || 70; // Default confidence
+      
+      // Multipliers based on Plan
+      const planMultiplierMap: Record<string, number> = {
+        free: 1,
+        premium: 1.3,
+        elite: 1.8
+      };
+      const planMultiplier = planMultiplierMap[candidate.plan || 'free'] || 1;
+      
+      // Boost Multiplier
+      const boostMultiplier = candidate.isBoosted ? 2 : 1;
+      
+      // Visibility Auction (Bid Amount)
+      const bidAmount = candidate.bidAmount || 0;
+
+      /**
+       * FINAL RANKING FORMULA (NÍVEL ABSURDO)
+       * finalRankScore = (aiScore * 0.5) + (confidenceScore * 0.2) + (planMultiplier * 10) + (boostMultiplier * 5) + bidAmount
+       */
+      const finalRank = (aiScore * 0.5) + (confidenceScore * 0.2) + (planMultiplier * 10) + (boostMultiplier * 5) + bidAmount;
 
       return {
         ...aiResult,
-        finalScore
+        aiScore,
+        confidenceScore,
+        finalScore: aiScore, // The "raw" AI score
+        finalRank: Math.round(finalRank) // The "boosted" ranking score
       };
     } catch (error) {
       console.error(`[${correlationId}] [MatchingEngine] AI Scoring failed:`, error);

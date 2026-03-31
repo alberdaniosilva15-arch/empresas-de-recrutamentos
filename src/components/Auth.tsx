@@ -3,6 +3,7 @@ import { useAuth } from '../AuthContext';
 import { auth } from '../firebase';
 import { motion } from 'motion/react';
 import { Mail, Lock, User as UserIcon, Building2, Briefcase, UserCircle, ClipboardList } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -73,14 +74,14 @@ export const Auth = () => {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-premium-gray w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl border border-premium-border relative z-10"
+        className="bg-premium-gray w-full max-w-md rounded-[2.5rem] p-6 md:p-10 shadow-2xl border border-premium-border relative z-10"
       >
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-gold rounded-2xl flex items-center justify-center text-premium-black mx-auto mb-6 shadow-xl shadow-gold/20">
-            <ClipboardList size={32} />
+        <div className="text-center mb-8 md:mb-10">
+          <div className="w-14 h-14 md:w-16 md:h-16 bg-gold rounded-2xl flex items-center justify-center text-premium-black mx-auto mb-6 shadow-xl shadow-gold/20">
+            <ClipboardList size={28} className="md:w-8 md:h-8" />
           </div>
-          <h1 className="text-4xl font-black text-gold mb-2 tracking-tighter">GoldTalent</h1>
-          <p className="text-slate-500 font-medium">
+          <h1 className="text-3xl md:text-4xl font-black text-gold mb-2 tracking-tighter">GoldTalent</h1>
+          <p className="text-slate-500 text-sm md:text-base font-medium">
             {isLogin ? 'Bem-vindo ao recrutamento premium' : 'Inicie sua jornada profissional'}
           </p>
         </div>
@@ -186,7 +187,7 @@ export const Auth = () => {
                     const { sendPasswordResetEmail } = await import('firebase/auth');
                     await sendPasswordResetEmail(auth, email);
                     setError(null);
-                    alert('Email de recuperação enviado! Verifique a sua caixa de entrada.');
+                    toast.success('Email de recuperação enviado! Verifique a sua caixa de entrada.');
                   } catch (err: any) {
                     setError(getErrorMessage(err));
                   }

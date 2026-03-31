@@ -8,6 +8,7 @@ import { useAuth } from "../AuthContext";
 import { triggerCandidateEmail } from "../lib/email";
 import { triggerWhatsAppNotification } from "../lib/whatsapp";
 import { api } from "../lib/api";
+import { toast } from "sonner";
 
 const STAGES: { id: CandidateStatus; label: string; color: string }[] = [
   { id: "applied", label: "Novos", color: "bg-blue-500" },
@@ -78,7 +79,7 @@ export const Kanban = () => {
         await triggerWhatsAppNotification(candidate.name, candidate.phone, newStatus, job?.title || "Vaga");
       }
     } catch (error: any) {
-      alert(error.message);
+      toast.error(error.message);
     }
   };
 
@@ -105,11 +106,11 @@ export const Kanban = () => {
   }
 
   return (
-    <div className="p-8 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-8 space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gold">Pipeline de Recrutamento</h2>
-          <p className="text-slate-500">Acompanhe o progresso dos candidatos em tempo real.</p>
+          <h2 className="text-xl md:text-2xl font-bold text-gold">Pipeline de Recrutamento</h2>
+          <p className="text-slate-500 text-sm">Acompanhe o progresso dos candidatos em tempo real.</p>
         </div>
       </div>
 

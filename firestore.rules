@@ -1,12 +1,124 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /usage/{usageId} {
-      allow read, write: if request.auth != null && usageId.startsWith(request.auth.uid);
+    
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "alberdaniosilva16@gmail.com"));
     }
 
-    match /{document=**} {
-      allow read, write: if true;
+    function isRecruiter() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'recruiter';
+    }
+
+    function getUserCompanyId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['id', 'name', 'email', 'role']) &&
+             data.id is string && data.name is string && data.name.size() > 0 &&
+             isValidEmail(data.email) &&
+             data.role in ['recruiter', 'candidate', 'admin'];
+    }
+
+    function isValidJob(data) {
+      return hasRequiredFields(['title', 'description', 'location', 'companyId']) &&
+             data.title is string && data.title.size() > 0 &&
+             data.description is string &&
+             data.location is string &&
+             data.companyId is string;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can only read their own profile (PII protection)
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Creation usually happens via backend, but if client-side:
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+                      request.resource.data.role != 'admin'; // Can't self-promote to admin
+      
+      // Updates: can't change role or plan directly (must use backend)
+      allow update: if isOwner(userId) && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.role == resource.data.role &&
+                      request.resource.data.plan == resource.data.plan;
+    }
+
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isAdmin(); // Companies created by admin or backend
+      allow update: if isAuthenticated() && (isAdmin() || request.auth.uid == resource.data.ownerId);
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isAdmin() || (isRecruiter() && request.resource.data.companyId == getUserCompanyId()));
+      allow update: if isAuthenticated() && (isAdmin() || (isRecruiter() && resource.data.companyId == getUserCompanyId()));
+      allow delete: if isAdmin() || (isAuthenticated() && isRecruiter() && resource.data.companyId == getUserCompanyId());
+    }
+
+    match /candidates/{candidateId} {
+      // Candidates contain PII (email, phone)
+      // Simplified read rule for recruiters to avoid query permission issues
+      allow read: if isAuthenticated() && (
+        request.auth.uid == candidateId || 
+        isAdmin() || 
+        (getUserCompanyId() != null)
+      );
+      allow create: if isAuthenticated() && (
+        isAdmin() || 
+        (getUserCompanyId() != null && request.resource.data.companyId == getUserCompanyId())
+      );
+      allow update: if isAuthenticated() && (
+        request.auth.uid == candidateId || 
+        isAdmin() || 
+        (getUserCompanyId() != null && resource.data.companyId == getUserCompanyId())
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && getUserCompanyId() != null && resource.data.companyId == getUserCompanyId());
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+    }
+
+    match /usage/{usageId} {
+      allow read, write: if isAuthenticated() && (usageId == request.auth.uid || usageId.matches("^" + request.auth.uid + "_.*"));
     }
   }
 }

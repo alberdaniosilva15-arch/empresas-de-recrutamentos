@@ -13,6 +13,7 @@ import { useAuth } from "../AuthContext";
 import { TimeAgo } from "./TimeAgo";
 import { generateJobDescription } from "../services/geminiService";
 import { api } from "../lib/api";
+import { toast } from "sonner";
 
 export const Jobs = () => {
   const { user } = useAuth();
@@ -107,7 +108,7 @@ export const Jobs = () => {
         setNewJob({ title: "", description: "", location: "Lisboa, Portugal", type: "Full-time", requiredSkills: "" });
       }
     } catch (error: any) {
-      alert(error.message);
+      toast.error(error.message);
     }
   };
 
@@ -134,11 +135,11 @@ export const Jobs = () => {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gold">Vagas em Aberto</h2>
-          <p className="text-slate-500">Gerencie suas vagas e acompanhe o progresso de cada uma.</p>
+          <h2 className="text-xl md:text-2xl font-bold text-gold">Vagas em Aberto</h2>
+          <p className="text-slate-500 text-sm">Gerencie suas vagas e acompanhe o progresso de cada uma.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button 
@@ -330,7 +331,7 @@ export const Jobs = () => {
                       type="button"
                       onClick={async () => {
                         if (!newJob.title) {
-                          alert("Por favor, insira o título da vaga primeiro.");
+                          toast.error("Por favor, insira o título da vaga primeiro.");
                           return;
                         }
                         setIsGenerating(true);

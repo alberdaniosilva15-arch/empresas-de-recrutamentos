@@ -58,14 +58,39 @@ export function initEventHandlers() {
       await adminDb.collection("candidates").doc(candidateId).update({
         status: stage,
         score: result.finalScore,
+        finalRank: result.finalRank,
         classification: result.decision === 'reject' ? 'baixo' : (result.decision === 'interview' ? 'alto' : 'médio'),
         updatedAt: adminTimestamp(),
       });
 
-      // Notify Candidate via WhatsApp (Simulated)
+      // 3. Monetization Logic: Set isNearHire and Trigger Upgrade Prompts
       const candidateSnap = await adminDb.collection("candidates").doc(candidateId).get();
       const candidate = candidateSnap.data() as Candidate;
       
+      // Find associated user
+      const userSnap = await adminDb.collection("users").where("email", "==", candidate.email).limit(1).get();
+      if (!userSnap.empty) {
+        const userDoc = userSnap.docs[0];
+        const userData = userDoc.data();
+        
+        const updates: any = { updatedAt: adminTimestamp() };
+        
+        if (stage === 'interview' || stage === 'offer') {
+          updates.isNearHire = true;
+        }
+
+        // "Almost Won" Trigger: if rank is high but user is free
+        // Note: For demo, we'll assume rank <= 5 is "near win"
+        // In a real app, we'd calculate rank relative to other candidates
+        if (result.finalRank >= 70 && userData.plan === 'free') {
+          console.log(`[Monetization] Triggering upgrade prompt for user ${userDoc.id}: Estás muito perto de ser selecionado.`);
+          // We could send a notification here
+        }
+
+        await userDoc.ref.update(updates);
+      }
+
+      // Notify Candidate via WhatsApp (Simulated)
       let message = "";
       if (stage === 'rejected') {
         message = "Obrigado pelo teu interesse. De momento não temos uma vaga que se ajuste perfeitamente ao teu perfil, mas guardaremos o teu CV.";

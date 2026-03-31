@@ -5,14 +5,26 @@
 
 export type CandidateStatus = 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected';
 
+export type Plan = 'free' | 'premium' | 'elite';
+
 export interface User {
   id: string;
   email: string;
   name: string;
   role: 'admin' | 'recruiter' | 'candidate';
   companyId?: string; // Only for recruiters
+  plan: Plan;
+  boosts: number;
+  trustScore: number;
+  visibilityScore: number;
+  expiresAt?: any;
   createdAt: any;
   updatedAt: any;
+  loginStreak: number;
+  lastLogin?: any;
+  activityHigh?: boolean;
+  isNearHire?: boolean;
+  hasUsedBoostBefore?: boolean;
 }
 
 export interface Company {
@@ -34,9 +46,12 @@ export interface Job {
   companyId: string;
   requiredSkills: string[];
   salaryRange?: string;
+  isPremium?: boolean; // Only for premium users
   createdAt: any;
   updatedAt: any;
   expiresAt: any;
+  bids?: { userId: string; amount: number }[];
+  boostCount?: number;
 }
 
 export interface StatusHistoryEntry {
@@ -55,7 +70,12 @@ export interface Candidate {
   skills: string[];
   experienceKeywords: string[];
   education?: string;
-  score: number;
+  score: number; // AI Score
+  confidenceScore?: number; // Backend heuristic score
+  finalScore?: number; // Weighted combination (Visibility Engine)
+  planMultiplier?: number;
+  boostMultiplier?: number;
+  flags?: string[]; // Security or quality flags
   scoreBreakdown: {
     skills: number;
     experience: number;
@@ -66,6 +86,9 @@ export interface Candidate {
   statusHistory?: StatusHistoryEntry[];
   jobId: string; // Primary job applied to
   companyId: string;
+  plan?: Plan;
+  isBoosted?: boolean;
+  bidAmount?: number;
   createdAt: any;
   updatedAt: any;
 }
@@ -77,9 +100,24 @@ export interface Application {
   companyId: string;
   status: CandidateStatus;
   compatibilityScore: number;
+  confidenceScore?: number;
+  finalScore?: number;
+  planMultiplier?: number;
+  boostMultiplier?: number;
   aiAnalysis?: string;
   appliedAt: any;
   updatedAt: any;
+}
+
+export interface SecurityEvent {
+  id: string;
+  userId: string;
+  type: 'SCORE_MANIPULATION' | 'SUSPICIOUS_CONTENT' | 'RATE_LIMIT_EXCEEDED';
+  details: any;
+  originalScore?: number;
+  sanitizedScore?: number;
+  correlationId?: string;
+  timestamp: any;
 }
 
 export interface Conversation {

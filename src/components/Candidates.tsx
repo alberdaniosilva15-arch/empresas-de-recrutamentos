@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, Plus, Mail, Phone, MoreVertical, Star, Clock, CheckCircle2, AlertCircle, X, FileText, Download, Trash2, ExternalLink, ClipboardList, Sparkles } from "lucide-react";
+import { Search, Filter, Plus, Mail, Phone, MoreVertical, Star, Clock, CheckCircle2, AlertCircle, X, FileText, Download, Trash2, ExternalLink, ClipboardList, Sparkles, TrendingUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, updateDoc, doc, deleteDoc, where, arrayUnion } from "firebase/firestore";
@@ -8,7 +8,8 @@ import { triggerCandidateEmail } from "../lib/email";
 import { triggerWhatsAppNotification } from "../lib/whatsapp";
 import { api } from "../lib/api";
 import { useAuth } from "../AuthContext";
-import { suggestJobsForCandidate } from "../services/geminiService";
+import { suggestJobsForCandidate, parseCV, scoreCandidate } from "../services/geminiService";
+import { toast } from "sonner";
 
 export const Candidates = () => {
   const { user } = useAuth();
@@ -86,7 +87,7 @@ export const Candidates = () => {
         setSelectedCandidate({ ...selectedCandidate, status: newStatus });
       }
     } catch (error: any) {
-      alert(error.message);
+      toast.error(error.message);
     }
   };
 
@@ -131,16 +132,30 @@ export const Candidates = () => {
     setIsAnalyzing(true);
 
     try {
+      const cvText = `Experiência: ${newCandidate.experience}\nEducação: ${newCandidate.education}`;
+      
+      // 1. Parse CV in frontend
+      const parsedCV = await parseCV(cvText);
+      
+      // 2. Score candidate against job in frontend
+      const job = jobs.find(j => j.id === newCandidate.jobId);
+      if (job) {
+        const scoring = await scoreCandidate(cvText, job.description || "");
+        Object.assign(parsedCV, scoring);
+      }
+
       const result = await api.post("/api/candidates", {
-        cvText: `Experiência: ${newCandidate.experience}\nEducação: ${newCandidate.education}`,
-        jobId: newCandidate.jobId
+        cvText,
+        jobId: newCandidate.jobId,
+        parsedCV
       });
 
       if (result.success) {
         // Now create the application
         await api.post("/api/applications", {
           candidateId: result.candidate.id,
-          jobId: newCandidate.jobId
+          jobId: newCandidate.jobId,
+          matchResult: parsedCV
         });
 
         // Send initial email (could also be moved to backend)
@@ -151,7 +166,7 @@ export const Candidates = () => {
         setNewCandidate({ name: "", email: "", phone: "", jobId: "", experience: "", education: "" });
       }
     } catch (error: any) {
-      alert(error.message);
+      toast.error(error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -199,29 +214,29 @@ export const Candidates = () => {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gold">Base de Candidatos</h2>
-          <p className="text-slate-500">Gerencie todos os talentos em um só lugar.</p>
+          <h2 className="text-xl md:text-2xl font-bold text-gold">Base de Candidatos</h2>
+          <p className="text-slate-500 text-sm">Gerencie todos os talentos em um só lugar.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative group">
+          <div className="relative group flex-1 md:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 group-focus-within:text-gold transition-colors" size={18} />
             <input 
               type="text" 
               placeholder="Pesquisar..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2.5 bg-premium-gray border border-premium-border rounded-xl text-sm text-slate-300 focus:ring-2 focus:ring-gold outline-none w-64 transition-all placeholder:text-slate-600"
+              className="w-full md:w-64 pl-10 pr-4 py-2.5 bg-premium-gray border border-premium-border rounded-xl text-sm text-slate-300 focus:ring-2 focus:ring-gold outline-none transition-all placeholder:text-slate-600"
             />
           </div>
-          <div className="relative">
+          <div className="relative flex-1 md:flex-none">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gold" size={18} />
             <select 
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
-              className="pl-10 pr-4 py-2.5 bg-premium-gray border border-premium-border rounded-xl text-sm text-gold focus:ring-2 focus:ring-gold outline-none appearance-none cursor-pointer min-w-[140px]"
+              className="w-full md:min-w-[140px] pl-10 pr-4 py-2.5 bg-premium-gray border border-premium-border rounded-xl text-sm text-gold focus:ring-2 focus:ring-gold outline-none appearance-none cursor-pointer"
             >
               <option value="Todos">Todos Status</option>
               <option value="applied">Novo</option>
@@ -271,8 +286,23 @@ export const Candidates = () => {
               >
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-premium-black border border-premium-border flex items-center justify-center text-gold font-bold group-hover:bg-gold group-hover:text-premium-black transition-all">
+                    <div className="w-10 h-10 rounded-2xl bg-premium-black border border-premium-border flex items-center justify-center text-gold font-bold group-hover:bg-gold group-hover:text-premium-black transition-all relative">
                       {candidate.name.charAt(0)}
+                      {candidate.plan === 'elite' && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center border border-premium-black shadow-sm shadow-purple-500/50">
+                          <Star size={10} className="text-white" />
+                        </div>
+                      )}
+                      {candidate.plan === 'premium' && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-gold rounded-full flex items-center justify-center border border-premium-black shadow-sm shadow-gold/50">
+                          <CheckCircle2 size={10} className="text-premium-black" />
+                        </div>
+                      )}
+                      {candidate.isBoosted && (
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center border border-premium-black shadow-sm shadow-orange-500/50">
+                          <TrendingUp size={10} className="text-white" />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <p className="text-sm font-bold text-gold group-hover:text-gold-light transition-colors">{candidate.name}</p>
@@ -308,12 +338,17 @@ export const Candidates = () => {
                       <div 
                         className={cn(
                           "h-full rounded-full transition-all duration-1000",
-                          candidate.score >= 80 ? "bg-green-500" : candidate.score >= 50 ? "bg-amber-500" : "bg-red-500"
+                          (candidate.finalScore || candidate.score) >= 80 ? "bg-green-500" : (candidate.finalScore || candidate.score) >= 50 ? "bg-amber-500" : "bg-red-500"
                         )}
-                        style={{ width: `${candidate.score}%` }}
+                        style={{ width: `${candidate.finalScore || candidate.score}%` }}
                     ></div>
                     </div>
-                    <span className="text-xs font-black text-gold">{candidate.score}%</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-gold">{candidate.finalScore || candidate.score}%</span>
+                      {candidate.flags && candidate.flags.length > 0 && (
+                        <span className="text-[8px] text-red-400 font-bold uppercase animate-pulse">⚠️ Risco</span>
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -492,7 +527,7 @@ export const Candidates = () => {
                             selectedCandidate.phone || "", 
                             selectedCandidate.status, 
                             job?.title || "Vaga"
-                          ).then(() => alert("Notificação enviada!"));
+                          ).then(() => toast.success("Notificação enviada!"));
                         }}
                         className="flex items-center gap-2 text-[10px] font-black bg-premium-gray text-gold px-4 py-2 rounded-xl border border-premium-border uppercase tracking-widest cursor-pointer hover:bg-gold hover:text-premium-black transition-all"
                       >
@@ -505,18 +540,37 @@ export const Candidates = () => {
               </div>
               
               <div className="p-10 space-y-10">
-                <div className="grid grid-cols-3 gap-6">
-                  <div className="p-6 bg-premium-black rounded-3xl border border-premium-border">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Score AI</p>
-                    <p className="text-2xl font-black text-gold">{selectedCandidate.score || 0}%</p>
+                {selectedCandidate.flags && selectedCandidate.flags.length > 0 && (
+                  <div className="p-4 bg-red-900/20 border border-red-900/30 rounded-2xl space-y-2">
+                    <p className="text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2">
+                      <AlertCircle size={14} /> Alertas de Segurança e Qualidade
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCandidate.flags.map((flag, i) => (
+                        <span key={i} className="text-[10px] bg-red-900/40 text-red-100 px-2.5 py-1 rounded-lg font-bold border border-red-900/50">
+                          {flag}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-6 bg-premium-black rounded-3xl border border-premium-border">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Status</p>
-                    <p className="text-xl font-black text-gold">{selectedCandidate.status}</p>
+                )}
+
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="p-4 bg-premium-black rounded-3xl border border-premium-border">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Score IA</p>
+                    <p className="text-xl font-black text-gold">{selectedCandidate.score || 0}%</p>
                   </div>
-                  <div className="p-6 bg-premium-black rounded-3xl border border-premium-border">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Classificação</p>
-                    <p className="text-xl font-black text-green-400 uppercase tracking-tighter">{selectedCandidate.classification || "N/A"}</p>
+                  <div className="p-4 bg-premium-black rounded-3xl border border-premium-border">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Confiança</p>
+                    <p className="text-xl font-black text-indigo-400">{selectedCandidate.confidenceScore || 0}%</p>
+                  </div>
+                  <div className="p-4 bg-premium-black rounded-3xl border border-gold/30 ring-1 ring-gold/20">
+                    <p className="text-[10px] font-black text-gold uppercase tracking-widest mb-1">Rank Final</p>
+                    <p className="text-xl font-black text-gold">{selectedCandidate.finalScore || selectedCandidate.score || 0}%</p>
+                  </div>
+                  <div className="p-4 bg-premium-black rounded-3xl border border-premium-border">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Classificação</p>
+                    <p className="text-sm font-black text-green-400 uppercase tracking-tighter mt-1">{selectedCandidate.classification || "N/A"}</p>
                   </div>
                 </div>
 
