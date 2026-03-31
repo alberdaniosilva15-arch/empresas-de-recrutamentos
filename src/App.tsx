@@ -15,7 +15,8 @@ import {
   Building2,
   PieChart,
   ClipboardList,
-  Phone
+  Phone,
+  ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Dashboard } from "./components/Dashboard";
@@ -25,6 +26,7 @@ import { Kanban } from "./components/Kanban";
 import { AIChat } from "./components/AIChat";
 import { Auth } from "./components/Auth";
 import { Onboarding } from "./components/Onboarding";
+import { Diagnostics } from "./components/Diagnostics";
 import { AuthProvider, useAuth } from "./AuthContext";
 
 const SidebarItem = ({ icon: Icon, label, path, active, onClick }: any) => (
@@ -57,6 +59,7 @@ const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
     { icon: Briefcase, label: "Vagas", path: "/jobs" },
     { icon: Users, label: "Candidatos", path: "/candidates" },
     { icon: ClipboardList, label: "Pipeline", path: "/kanban" },
+    { icon: ShieldCheck, label: "Diagnóstico", path: "/diagnostics" },
   ] : [
     { icon: Briefcase, label: "Minhas Candidaturas", path: "/" },
     { icon: Search, label: "Procurar Vagas", path: "/search" },
@@ -238,6 +241,7 @@ const AppContent = () => {
                 <Route path="/candidates" element={<Candidates />} />
                 <Route path="/jobs" element={<Jobs />} />
                 <Route path="/kanban" element={<Kanban />} />
+                <Route path="/diagnostics" element={<Diagnostics />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AnimatePresence>
