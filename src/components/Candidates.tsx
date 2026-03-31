@@ -6,6 +6,7 @@ import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp, update
 import { Candidate, CandidateStatus, Job } from "../types";
 import { triggerCandidateEmail } from "../lib/email";
 import { triggerWhatsAppNotification } from "../lib/whatsapp";
+import { api } from "../lib/api";
 import { useAuth } from "../AuthContext";
 import { suggestJobsForCandidate } from "../services/geminiService";
 
@@ -69,17 +70,12 @@ export const Candidates = () => {
       const candidate = candidates.find(c => c.id === id);
       if (!candidate) return;
 
-      const historyEntry = {
+      await api.patch(`/api/candidates/${id}/status`, { 
         status: newStatus,
-        timestamp: new Date().toISOString()
-      };
-
-      await updateDoc(doc(db, "candidates", id), { 
-        status: newStatus,
-        statusHistory: arrayUnion(historyEntry)
+        comment: `Status alterado pelo recrutador ${user?.name}`
       });
       
-      // Send notifications
+      // Send notifications (these could also be moved to backend)
       const job = jobs.find(j => j.id === candidate.jobId);
       await triggerCandidateEmail(candidate.email, candidate.name, newStatus, job?.title || "Vaga");
       if (candidate.phone) {
@@ -87,11 +83,10 @@ export const Candidates = () => {
       }
       
       if (selectedCandidate?.id === id) {
-        const updatedHistory = [...(selectedCandidate.statusHistory || []), historyEntry];
-        setSelectedCandidate({ ...selectedCandidate, status: newStatus, statusHistory: updatedHistory });
+        setSelectedCandidate({ ...selectedCandidate, status: newStatus });
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, "candidates");
+    } catch (error: any) {
+      alert(error.message);
     }
   };
 
@@ -136,42 +131,27 @@ export const Candidates = () => {
     setIsAnalyzing(true);
 
     try {
-      const job = jobs.find(j => j.id === newCandidate.jobId);
-      
-      // Call AI scoring API
-      const aiResponse = await fetch("/api/score-cv", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: `Nome: ${newCandidate.name}\nExperiência: ${newCandidate.experience}\nEducação: ${newCandidate.education}`
-        })
-      });
-      
-      const aiData = await aiResponse.json();
-
-      const historyEntry = {
-        status: "Novo" as CandidateStatus,
-        timestamp: new Date().toISOString()
-      };
-
-      await addDoc(collection(db, "candidates"), {
-        ...newCandidate,
-        status: "Novo",
-        statusHistory: [historyEntry],
-        companyId: user.companyId,
-        score: aiData.score || 0,
-        classification: aiData.classification || "médio",
+      const result = await api.post("/api/candidates", {
         cvText: `Experiência: ${newCandidate.experience}\nEducação: ${newCandidate.education}`,
-        createdAt: serverTimestamp()
+        jobId: newCandidate.jobId
       });
 
-      // Send initial email
-      await triggerCandidateEmail(newCandidate.email, newCandidate.name, "Novo", job?.title || "Vaga");
-      
-      setShowModal(false);
-      setNewCandidate({ name: "", email: "", phone: "", jobId: "", experience: "", education: "" });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, "candidates");
+      if (result.success) {
+        // Now create the application
+        await api.post("/api/applications", {
+          candidateId: result.candidate.id,
+          jobId: newCandidate.jobId
+        });
+
+        // Send initial email (could also be moved to backend)
+        const job = jobs.find(j => j.id === newCandidate.jobId);
+        await triggerCandidateEmail(newCandidate.email, newCandidate.name, "applied", job?.title || "Vaga");
+
+        setShowModal(false);
+        setNewCandidate({ name: "", email: "", phone: "", jobId: "", experience: "", education: "" });
+      }
+    } catch (error: any) {
+      alert(error.message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -186,13 +166,12 @@ export const Candidates = () => {
 
   const getStatusColor = (status: CandidateStatus) => {
     switch (status) {
-      case "Novo": return "bg-blue-900/20 text-blue-400 border-blue-900/30";
-      case "Triagem": return "bg-amber-900/20 text-amber-400 border-amber-900/30";
-      case "Teste Técnico": return "bg-purple-900/20 text-purple-400 border-purple-900/30";
-      case "Entrevista": return "bg-indigo-900/20 text-indigo-400 border-indigo-900/30";
-      case "Proposta": return "bg-emerald-900/20 text-emerald-400 border-emerald-900/30";
-      case "Contratado": return "bg-green-900/20 text-green-400 border-green-900/30";
-      case "Rejeitado": return "bg-red-900/20 text-red-400 border-red-900/30";
+      case "applied": return "bg-blue-900/20 text-blue-400 border-blue-900/30";
+      case "screening": return "bg-amber-900/20 text-amber-400 border-amber-900/30";
+      case "interview": return "bg-indigo-900/20 text-indigo-400 border-indigo-900/30";
+      case "offer": return "bg-emerald-900/20 text-emerald-400 border-emerald-900/30";
+      case "hired": return "bg-green-900/20 text-green-400 border-green-900/30";
+      case "rejected": return "bg-red-900/20 text-red-400 border-red-900/30";
       default: return "bg-slate-900/20 text-slate-400 border-slate-900/30";
     }
   };
@@ -245,13 +224,12 @@ export const Candidates = () => {
               className="pl-10 pr-4 py-2.5 bg-premium-gray border border-premium-border rounded-xl text-sm text-gold focus:ring-2 focus:ring-gold outline-none appearance-none cursor-pointer min-w-[140px]"
             >
               <option value="Todos">Todos Status</option>
-              <option value="Novo">Novo</option>
-              <option value="Triagem">Triagem</option>
-              <option value="Teste Técnico">Teste Técnico</option>
-              <option value="Entrevista">Entrevista</option>
-              <option value="Proposta">Proposta</option>
-              <option value="Contratado">Contratado</option>
-              <option value="Rejeitado">Rejeitado</option>
+              <option value="applied">Novo</option>
+              <option value="screening">Triagem</option>
+              <option value="interview">Entrevista</option>
+              <option value="offer">Proposta</option>
+              <option value="hired">Contratado</option>
+              <option value="rejected">Rejeitado</option>
             </select>
           </div>
           <button 
@@ -316,7 +294,12 @@ export const Candidates = () => {
                     "text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest",
                     getStatusColor(candidate.status)
                   )}>
-                    {candidate.status}
+                    {candidate.status === 'applied' ? 'Novo' :
+                     candidate.status === 'screening' ? 'Triagem' :
+                     candidate.status === 'interview' ? 'Entrevista' :
+                     candidate.status === 'offer' ? 'Proposta' :
+                     candidate.status === 'hired' ? 'Contratado' :
+                     candidate.status === 'rejected' ? 'Rejeitado' : candidate.status}
                   </span>
                 </td>
                 <td className="px-6 py-4">
@@ -606,13 +589,12 @@ export const Candidates = () => {
                     onChange={(e) => handleStatusChange(selectedCandidate.id, e.target.value as CandidateStatus)}
                     className="flex-1 bg-gold text-premium-black py-4 rounded-2xl font-black shadow-xl shadow-gold/20 hover:bg-gold-light transition-all text-center appearance-none outline-none uppercase tracking-widest text-xs"
                   >
-                    <option value="Novo">Novo</option>
-                    <option value="Triagem">Triagem</option>
-                    <option value="Teste Técnico">Teste Técnico</option>
-                    <option value="Entrevista">Entrevista</option>
-                    <option value="Proposta">Proposta</option>
-                    <option value="Contratado">Contratado</option>
-                    <option value="Rejeitado">Rejeitado</option>
+                    <option value="applied">Novo</option>
+                    <option value="screening">Triagem</option>
+                    <option value="interview">Entrevista</option>
+                    <option value="offer">Proposta</option>
+                    <option value="hired">Contratado</option>
+                    <option value="rejected">Rejeitado</option>
                   </select>
                   <button 
                     onClick={() => handleDelete(selectedCandidate.id)}

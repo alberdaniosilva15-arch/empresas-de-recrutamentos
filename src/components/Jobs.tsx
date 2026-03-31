@@ -12,6 +12,7 @@ import { Job, Candidate } from "../types";
 import { useAuth } from "../AuthContext";
 import { TimeAgo } from "./TimeAgo";
 import { generateJobDescription } from "../services/geminiService";
+import { api } from "../lib/api";
 
 export const Jobs = () => {
   const { user } = useAuth();
@@ -95,18 +96,18 @@ export const Jobs = () => {
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 4);
 
-      await addDoc(collection(db, "jobs"), {
+      const result = await api.post("/api/jobs", {
         ...newJob,
         requiredSkills: newJob.requiredSkills.split(",").map(s => s.trim()),
-        status: "open",
-        companyId: user.companyId,
-        createdAt: serverTimestamp(),
-        expiresAt: expiresAt
+        expiresAt: expiresAt.toISOString()
       });
-      setShowModal(false);
-      setNewJob({ title: "", description: "", location: "Lisboa, Portugal", type: "Full-time", requiredSkills: "" });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, "jobs");
+
+      if (result.success) {
+        setShowModal(false);
+        setNewJob({ title: "", description: "", location: "Lisboa, Portugal", type: "Full-time", requiredSkills: "" });
+      }
+    } catch (error: any) {
+      alert(error.message);
     }
   };
 

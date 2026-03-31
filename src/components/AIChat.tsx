@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from "react";
 import { MessageSquare, Send, X, Bot, User, Sparkles, ClipboardList } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { chatWithAI } from "../services/geminiService";
+import { api } from "../lib/api";
 import { db } from "../firebase";
 import { collection, onSnapshot, query, where, doc, getDoc, setDoc, increment } from "firebase/firestore";
 import { useAuth } from "../AuthContext";
@@ -88,31 +89,24 @@ export const AIChat = () => {
     setIsLoading(true);
 
     try {
-      const context = `
-        Data/Hora Atual: ${new Date().toLocaleString('pt-BR')}
-        O recrutador ${user?.name} está logado.
-        Empresa: ${user?.companyId || "Empresa Parceira"}.
-        Vagas Ativas (${jobs.length}): ${jobs.map(j => `${j.title} (${j.location})`).join(", ")}.
-        Candidatos no Pipeline (${candidates.length}): ${candidates.map(c => `${c.name} - Status: ${c.status}`).join(", ")}.
-        Estatísticas: ${jobs.length} vagas, ${candidates.length} candidatos totais.
-      `;
-      
-      const response = await chatWithAI(userMsg, context);
-      setMessages(prev => [...prev, { role: 'ai', text: response || "Não consegui processar sua mensagem." }]);
-      
-      // Update usage in Firestore
-      const today = new Date().toISOString().split('T')[0];
-      const usageId = `${user?.uid}_${today}`;
-      const usageRef = doc(db, "usage", usageId);
-      
-      await setDoc(usageRef, { 
-        count: increment(1),
-        lastUsed: new Date().toISOString(),
-        userId: user?.uid
-      }, { merge: true });
+      const result = await api.post("/api/chat", {
+        message: userMsg,
+        context: {
+          userName: user?.name,
+          companyId: user?.companyId,
+          jobCount: jobs.length,
+          candidateCount: candidates.length,
+          activeJobs: jobs.map(j => ({ title: j.title, location: j.location })),
+          pipelineSummary: candidates.map(c => ({ name: c.name, status: c.status }))
+        }
+      });
 
-    } catch (error) {
-      setMessages(prev => [...prev, { role: 'ai', text: "Erro ao conectar com a IA do GoldTalent." }]);
+      if (result.success) {
+        setMessages(prev => [...prev, { role: 'ai', text: result.response }]);
+        setDailyLimit(prev => prev - 1);
+      }
+    } catch (error: any) {
+      setMessages(prev => [...prev, { role: 'ai', text: "Desculpe, Lukeni está temporariamente indisponível. Por favor, tente novamente mais tarde." }]);
     } finally {
       setIsLoading(false);
     }

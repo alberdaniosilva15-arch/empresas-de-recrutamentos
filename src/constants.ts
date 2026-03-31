@@ -11,7 +11,8 @@ export const DUMMY_JOBS: Job[] = [
     companyId: "company-1",
     requiredSkills: ["Gestão de Stock", "Liderança", "ERP"],
     expiresAt: "2026-07-28T22:16:34Z",
-    createdAt: "2026-03-28T22:16:34Z"
+    createdAt: "2026-03-28T22:16:34Z",
+    updatedAt: "2026-03-28T22:16:34Z"
   },
   {
     id: "job-2",
@@ -23,7 +24,8 @@ export const DUMMY_JOBS: Job[] = [
     companyId: "company-1",
     requiredSkills: ["Excel Avançado", "Análise de Dados", "Inglês"],
     expiresAt: "2026-07-28T22:16:34Z",
-    createdAt: "2026-03-28T22:16:34Z"
+    createdAt: "2026-03-28T22:16:34Z",
+    updatedAt: "2026-03-28T22:16:34Z"
   }
 ];
 
@@ -36,7 +38,7 @@ export const DUMMY_CANDIDATES: Candidate[] = [
     cvText: "Experiência de 5 anos em gestão de armazém...",
     score: 85,
     classification: "alto",
-    status: "Entrevista",
+    status: "interview",
     jobId: "job-1",
     companyId: "company-1",
     skills: ["Gestão de Stock", "Liderança"],
@@ -46,7 +48,8 @@ export const DUMMY_CANDIDATES: Candidate[] = [
       experience: 80,
       education: 85
     },
-    createdAt: "2026-03-28T22:16:34Z"
+    createdAt: "2026-03-28T22:16:34Z",
+    updatedAt: "2026-03-28T22:16:34Z"
   },
   {
     id: "cand-2",
@@ -56,7 +59,7 @@ export const DUMMY_CANDIDATES: Candidate[] = [
     cvText: "Analista de supply chain com foco em otimização...",
     score: 72,
     classification: "médio",
-    status: "Triagem",
+    status: "screening",
     jobId: "job-2",
     companyId: "company-1",
     skills: ["Excel", "Análise"],
@@ -66,6 +69,7 @@ export const DUMMY_CANDIDATES: Candidate[] = [
       experience: 75,
       education: 70
     },
-    createdAt: "2026-03-28T22:16:34Z"
+    createdAt: "2026-03-28T22:16:34Z",
+    updatedAt: "2026-03-28T22:16:34Z"
   }
 ];

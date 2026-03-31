@@ -7,15 +7,15 @@ import { Candidate, CandidateStatus, Job } from "../types";
 import { useAuth } from "../AuthContext";
 import { triggerCandidateEmail } from "../lib/email";
 import { triggerWhatsAppNotification } from "../lib/whatsapp";
+import { api } from "../lib/api";
 
 const STAGES: { id: CandidateStatus; label: string; color: string }[] = [
-  { id: "Novo", label: "Novos", color: "bg-blue-500" },
-  { id: "Triagem", label: "Triagem", color: "bg-purple-500" },
-  { id: "Teste Técnico", label: "Teste Técnico", color: "bg-indigo-500" },
-  { id: "Entrevista", label: "Entrevista", color: "bg-orange-500" },
-  { id: "Proposta", label: "Proposta", color: "bg-emerald-500" },
-  { id: "Contratado", label: "Contratado", color: "bg-gold" },
-  { id: "Rejeitado", label: "Rejeitados", color: "bg-red-500" },
+  { id: "applied", label: "Novos", color: "bg-blue-500" },
+  { id: "screening", label: "Triagem", color: "bg-purple-500" },
+  { id: "interview", label: "Entrevista", color: "bg-orange-500" },
+  { id: "offer", label: "Proposta", color: "bg-emerald-500" },
+  { id: "hired", label: "Contratado", color: "bg-gold" },
+  { id: "rejected", label: "Rejeitados", color: "bg-red-500" },
 ];
 
 export const Kanban = () => {
@@ -67,15 +67,18 @@ export const Kanban = () => {
     if (!candidate || candidate.status === newStatus) return;
 
     try {
-      await updateDoc(doc(db, "candidates", id), { status: newStatus });
+      await api.patch(`/api/candidates/${id}/status`, { 
+        status: newStatus,
+        comment: `Status alterado via Kanban pelo recrutador ${user?.name}`
+      });
       
       const job = jobs.find(j => j.id === candidate.jobId);
       await triggerCandidateEmail(candidate.email, candidate.name, newStatus, job?.title || "Vaga");
       if (candidate.phone) {
         await triggerWhatsAppNotification(candidate.name, candidate.phone, newStatus, job?.title || "Vaga");
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, "candidates");
+    } catch (error: any) {
+      alert(error.message);
     }
   };
 

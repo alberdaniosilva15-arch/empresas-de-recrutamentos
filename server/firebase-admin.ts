@@ -1,6 +1,41 @@
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 
+function validateFirebaseEnv() {
+  const requiredVars = ["FIREBASE_PROJECT_ID", "FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY"];
+  let hasErrors = false;
+
+  console.log("🔍 Verificando variáveis de ambiente do Firebase...");
+
+  for (const varName of requiredVars) {
+    const value = process.env[varName];
+    if (!value) {
+      console.error(`❌ ${varName} ausente`);
+      hasErrors = true;
+    } else if (varName === "FIREBASE_CLIENT_EMAIL" && !value.includes("@")) {
+      console.error(`❌ FIREBASE_CLIENT_EMAIL parece inválido: ${value}`);
+      hasErrors = true;
+    } else if (varName === "FIREBASE_PRIVATE_KEY") {
+      if (!value.includes("BEGIN PRIVATE KEY") || !value.includes("END PRIVATE KEY")) {
+        console.error("❌ FIREBASE_PRIVATE_KEY parece inválido (faltando BEGIN/END)");
+        hasErrors = true;
+      }
+      if (!value.includes("\\n")) {
+        console.warn("⚠️ FIREBASE_PRIVATE_KEY não tem \\n escapado (pode causar erros na Vercel)");
+      }
+    }
+  }
+
+  if (hasErrors) {
+    console.error("⛔ Erro crítico na configuração do Firebase. O backend pode não funcionar corretamente.");
+  } else {
+    console.log("✅ Checagem final do Firebase concluída");
+  }
+}
+
+// Executa a validação no carregamento do módulo
+validateFirebaseEnv();
+
 if (!admin.apps.length) {
   // Tenta ler das variáveis de ambiente da Vercel primeiro
   const projectId = process.env.FIREBASE_PROJECT_ID;
